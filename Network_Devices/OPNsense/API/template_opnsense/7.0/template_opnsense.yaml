@@ -1,0 +1,1061 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: e614a8670df341429f07f594d5c15a99
+      template: 'OPNsense by API'
+      name: 'OPNsense by API'
+      description: 'OPNsense by API'
+      groups:
+        - name: Templates
+      items:
+        - uuid: e0ae1645f56044bcace1eebbc6b817a9
+          name: 'OPNsense: OpenVPN Sessions'
+          type: HTTP_AGENT
+          key: opnsense.api.openvpn.sessions
+          value_type: TEXT
+          trends: '0'
+          authtype: BASIC
+          username: '{$OPNSENSE.TOKEN.KEY}'
+          password: '{$OPNSENSE.TOKEN.SECRET}'
+          description: |
+            Needs permission:
+            Status: OpenVPN
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$[*].*'
+          url: 'https://{HOST.IP}/api/openvpn/service/search_sessions'
+          tags:
+            - tag: opnsense
+              value: openvpn
+        - uuid: 7fe8b91b605f45d58de51ffbbffdcf10
+          name: 'OPNsense: Gateways'
+          type: HTTP_AGENT
+          key: opnsense.api.routing.gateways.configuration
+          value_type: TEXT
+          trends: '0'
+          authtype: BASIC
+          username: '{$OPNSENSE.TOKEN.KEY}'
+          password: '{$OPNSENSE.TOKEN.SECRET}'
+          description: |
+            Needs permission:
+            System: Gateways
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$[*].*'
+          url: 'https://{HOST.IP}/api/routing/settings/search_gateway'
+          tags:
+            - tag: opnsense
+              value: gateways_configuration
+        - uuid: e2c9e87878c64b9cbb36f1a9dc70548a
+          name: 'OPNsense: API Status'
+          type: HTTP_AGENT
+          key: opnsense.api.status
+          value_type: TEXT
+          trends: '0'
+          authtype: BASIC
+          username: '{$OPNSENSE.TOKEN.KEY}'
+          password: '{$OPNSENSE.TOKEN.SECRET}'
+          description: |
+            Needs permission:
+            System: Status
+          url: 'https://{HOST.IP}/api/core/system/status'
+          tags:
+            - tag: opnsense
+              value: openvpn
+        - uuid: de85a08a33a24bf3bbb10baa24e5c7e5
+          name: 'OPNsense: Trust - Certificates'
+          type: HTTP_AGENT
+          key: opnsense.api.trust.certificates
+          delay: 1d
+          value_type: TEXT
+          trends: '0'
+          authtype: BASIC
+          username: '{$OPNSENSE.TOKEN.KEY}'
+          password: '{$OPNSENSE.TOKEN.SECRET}'
+          description: |
+            Needs permission:
+            System: Certificate Manager
+            
+            Warning:
+            This permission also allows retrieval of key material!
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - '$[*].*'
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // The API doesn't allow filtering for fields.
+                  // To avoid saving key material we only return fields we want.
+                  // This also means if the API may return problematic fields in the future we still filter it.
+                  var certificateList = JSON.parse(value);
+                  
+                  var allowedFieldsArray = [
+                      "descr",
+                      "%caref",
+                      "key_type",
+                      "%key_type",
+                      "digest",
+                      "%digest",
+                      "cert_type",
+                      "%cert_type",
+                      "lifetime",
+                      "city",
+                      "state",
+                      "organization",
+                      "organizationalunit",
+                      "country",
+                      "email",
+                      "commonname",
+                      "ocsp_uri",
+                      "altnames_dns",
+                      "altnames_ip",
+                      "altnames_uri",
+                      "altnames_email",
+                      "rfc3280_purpose",
+                      "in_use",
+                      "is_user",
+                      "name",
+                      "valid_from",
+                      "valid_to"
+                  ];
+                  
+                  var filteredCertificateList = certificateList.map(function(singleCert) {
+                  
+                      var filteredCert = {};
+                  
+                      allowedFieldsArray.forEach(function(allowedField) {
+                          if (singleCert.hasOwnProperty(allowedField)) {
+                              filteredCert[allowedField] = singleCert[allowedField];
+                          }
+                      });
+                  
+                      return filteredCert;
+                  });
+                  
+                  return JSON.stringify(filteredCertificateList);
+          url: 'https://{HOST.IP}/api/trust/cert/search/'
+          tags:
+            - tag: opnsense
+              value: trust_certificates
+      discovery_rules:
+        - uuid: 0ad40b1aa01f4188a414736e1e07f430
+          name: 'Sessions discovery'
+          type: DEPENDENT
+          key: opnsense.api.openvpn.sessions.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: d69c697cfe714373a06fe8a8abaaf5f1
+              name: '{#DESCRIPTION} Bytes received'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.bytes_received[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description=="{#DESCRIPTION}" && @.bytes_received!="null")].bytes_received.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 960c3c35136f4d39b7d3c5c9d1d0dc47
+              name: '{#DESCRIPTION} Bytes sent'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.bytes_sent[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description=="{#DESCRIPTION}" && @.bytes_sent!="null")].bytes_sent.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: b7d13e5cd7fb480d92628b5fb5b08c9e
+              name: '{#DESCRIPTION} client ID'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.client_id[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description=="{#DESCRIPTION}" && @.client_id!="null")].client_id.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 5ffb19f6a7e74a98896a262c0aabd614
+              name: '{#DESCRIPTION} common name'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.common_name[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].common_name.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: c28c0cb432d349bfacbf34b1c8cfae88
+              name: '{#DESCRIPTION} connected since'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.connectedsince[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].connected_since.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 9cbf3d02510e43fe93d667668d4c609f
+              name: '{#DESCRIPTION} data channel cipher'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.data_channel_cipher[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].data_channel_cipher.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 23192f3ada1e4017984d44af08245a73
+              name: '{#DESCRIPTION} real address'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.realadress[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].real_address.first()'
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 76bcb0a9facf4e15b18d1f0bb2ecf9d8
+              name: '{#DESCRIPTION} status'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.status[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].status.first()'
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: be1240ce9d6642c28a61260d1a69d17f
+              name: '{#DESCRIPTION} type'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.type[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].type.first()'
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 843c8b65cd674a27b48ddd89b7225ce9
+              name: '{#DESCRIPTION} username'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.username[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].username.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 201e1ec29cf94d4ab2f6748fd88d9641
+              name: '{#DESCRIPTION} virtual address'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.virtualadress[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].virtual_address.first()'
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+            - uuid: 1bee07d247544ad49d64fe12824f4cf5
+              name: '{#DESCRIPTION} virtual ipv6 address'
+              type: DEPENDENT
+              key: 'opnsense.api.openvpn.sessions.virtual_ipv6_address[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.description == "{#DESCRIPTION}")].virtual_ipv6_address.first()'
+              master_item:
+                key: opnsense.api.openvpn.sessions
+              tags:
+                - tag: opnsense
+                  value: openvpn
+          master_item:
+            key: opnsense.api.openvpn.sessions
+          lld_macro_paths:
+            - lld_macro: '{#DESCRIPTION}'
+              path: $..description.first()
+        - uuid: 3557f17c33f34a9490668da7c7aff657
+          name: 'Gateways discovery'
+          type: DEPENDENT
+          key: opnsense.api.routing.gateways.configuration.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: c9a64c6703c2409b98c23313e593682c
+              name: '{#NAME} default gateway'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.defaultgw[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].defaultgw.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 25104dd4aaec44ca88d9bc78a606a505
+              name: '{#NAME} defunct'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.defunct[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].defunct.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: a1cbfcb5f9174e449bea59ce0e6dfc37
+              name: '{#NAME} delay'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.delay[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].delay.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 9b90cc3cd31c4770a0aed74ce019f61f
+              name: '{#NAME} description'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.descr[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].descr.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 29bac8f4262747d7ae9ce1a8d9ae1155
+              name: '{#NAME} disabled'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.disabled[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].disabled.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 9bfb857c75184b28bee933821198c10c
+              name: '{#NAME} far gateway'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.fargw[{#NAME}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].fargw.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 7c6b5dd6170c4c3f980bd23ab4be2a83
+              name: '{#NAME} force disabled'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.force_down[{#NAME}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].force_down.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 261bf4a9a3fa4e269db1f68dc7553d7a
+              name: '{#NAME} interface'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.interface[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].interface.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 9f0370c774f9429f8068c02ba8782acc
+              name: '{#NAME} loss'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.loss[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].loss.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 938c4b691b7e4ed3bbaecf555cefacda
+              name: '{#NAME} monitor IP'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.monitor[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].monitor.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: a58e764dae754086bf87184317ac78f6
+              name: '{#NAME} failover state monitoring'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.monitor_killstates[{#NAME}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].monitor_killstates.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 92c8400afb2941208a4973e95e0d02f6
+              name: '{#NAME} failback state monitoring'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.monitor_killstates_priority[{#NAME}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].monitor_killstates_priority.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 4b7c9c6d9f8d46f184be23257fe2cf25
+              name: '{#NAME} host route disabled'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.monitor_noroute[{#NAME}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].monitor_noroute.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 813df428ba7a47219cfcbf5f1fbcb35c
+              name: '{#NAME} priority'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.priority[{#NAME}]'
+              delay: '0'
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].priority.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 0402faacd167401a95962ffc63ea6618
+              name: '{#NAME} status'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.status[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].status.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+            - uuid: 787139252afd474fb945db3f91396524
+              name: '{#NAME} stddev'
+              type: DEPENDENT
+              key: 'opnsense.api.routing.gateways.configuration.stddev[{#NAME}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.name == "{#NAME}")].stddev.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.routing.gateways.configuration
+              tags:
+                - tag: opnsense
+                  value: gateways_configuration
+          master_item:
+            key: opnsense.api.routing.gateways.configuration
+          lld_macro_paths:
+            - lld_macro: '{#NAME}'
+              path: $..name.first()
+        - uuid: cb125a5ef95e40f8a03d57a7ccc3e931
+          name: 'Certificates discovery'
+          type: DEPENDENT
+          key: opnsense.api.trust.certificates.discovery
+          delay: '0'
+          item_prototypes:
+            - uuid: ce5054a84fc3485c8fe790b9776d18e9
+              name: '{#DESCRIPTION} SAN DNS'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.altnames_dns[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["altnames_dns"] != "")].[''altnames_dns''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 698ac370b60a4ff5b58a03002cad863d
+              name: '{#DESCRIPTION} SAN email'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.altnames_email[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["altnames_email"] != "")].[''altnames_email''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 1e230f92409c48bdb8e766b79a422e22
+              name: '{#DESCRIPTION} SAN IP'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.altnames_ip[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["altnames_ip"] != "")].[''altnames_ip''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: f2ecb6f42b344749bd35bbfd2ee53407
+              name: '{#DESCRIPTION} SAN URI'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.altnames_uri[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["altnames_uri"] != "")].[''altnames_uri''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: eaacdeedbc1f425b942a0c1f5a5ff684
+              name: '{#DESCRIPTION} issuer'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.carefname[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["%caref"] != "")].[''%caref''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 4f04576a73e74faaa63d15ea561c8710
+              name: '{#DESCRIPTION} cert type short'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.certtypeshort[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["cert_type"] != "")].[''cert_type''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: ccf0bab40ea14021a8a0b6cc2edd3f5a
+              name: '{#DESCRIPTION} cert type long'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.certtype[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["%cert_type"] != "")].[''%cert_type''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 95a49ad20f824e018dab48265b59d107
+              name: '{#DESCRIPTION} city'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.city[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["city"] != "")].[''city''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: e52796495bf14d4388f6544a02313696
+              name: '{#DESCRIPTION} commonname'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.commonname[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["commonname"] != "")].[''commonname''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: a20e4a5cfa014152ba8ffaaec3c52d8d
+              name: '{#DESCRIPTION} country'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.country[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["country"] != "")].[''country''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: e99ce472db0f4cb2a3f60a48dd3a05bc
+              name: '{#DESCRIPTION} digest long'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.digestlong[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["%digest"] != "")].[''%digest''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 7ecd7d34a57b49a99b0aa3254b92c4b5
+              name: '{#DESCRIPTION} digest short'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.digestshort[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["digest"] != "")].[''digest''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 84186d8c1f46494b857cfef3bdf956c5
+              name: '{#DESCRIPTION} is in use'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.in_use[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              valuemap:
+                name: Boolean
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["in_use"] != "")].[''in_use''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 5c204317d9614b08a18b3c539e339836
+              name: '{#DESCRIPTION} is user'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.is_user[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              valuemap:
+                name: Boolean
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["is_user"] != "")].[''is_user''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 4aaa454164834e549b3e0927124a155e
+              name: '{#DESCRIPTION} key type long'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.keytypelong[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["%key_type"] != "")].[''%key_type''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 7bf2defa5e174c94b186fa4f79d549e8
+              name: '{#DESCRIPTION} key type short'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.keytypeshort[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["key_type"] != "")].[''key_type''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: b4c632552d1744edbeb1e11f7affdbb5
+              name: '{#DESCRIPTION} DN'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.name[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["name"] != "")].[''name''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: b54826547aac4700a3da5cf3d63c7abc
+              name: '{#DESCRIPTION} OCSP URI'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.ocsp_uri[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["ocsp_uri"] != "")].[''ocsp_uri''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: fce53d4c3e664055841affebe874be3c
+              name: '{#DESCRIPTION} organizational unit'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.organizationalunit[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["organizationalunit"] != "")].[''organizationalunit''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 16572825b1584210a97778cf9f88de95
+              name: '{#DESCRIPTION} organization'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.organization[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["organization"] != "")].[''organization''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: c0a8d955f54e47599c5de90a3e869777
+              name: '{#DESCRIPTION} RFC3280 purpose'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.rfc3280_purpose[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["rfc3280_purpose"] != "")].[''rfc3280_purpose''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 1773f71dafdd4a3180c2c2854f125cbe
+              name: '{#DESCRIPTION} state'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.state[{#DESCRIPTION}]'
+              delay: '0'
+              value_type: TEXT
+              trends: '0'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["state"] != "")].[''state''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 7ae8056d080e4cfcb43bff1cb8756c07
+              name: '{#DESCRIPTION} valid from'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.valid_from[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["valid_from"] != "")].[''valid_from''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+            - uuid: 85a199d6651040f0b452ba25a21c759c
+              name: '{#DESCRIPTION} valid to'
+              type: DEPENDENT
+              key: 'opnsense.api.trust.certificates.valid_to[{#DESCRIPTION}]'
+              delay: '0'
+              trends: '0'
+              units: unixtime
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$..[?(@.descr=="{#DESCRIPTION}" && @["valid_to"] != "")].[''valid_to''].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: opnsense.api.trust.certificates
+              tags:
+                - tag: opnsense
+                  value: trust_certificates
+          master_item:
+            key: opnsense.api.trust.certificates
+          lld_macro_paths:
+            - lld_macro: '{#DESCRIPTION}'
+              path: $..descr.first()
+      valuemaps:
+        - uuid: 92cb9466a51c4406a662628a954a962f
+          name: Boolean
+          mappings:
+            - value: '1'
+              newvalue: 'Yes'
+            - value: '0'
+              newvalue: 'No'

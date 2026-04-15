@@ -372,6 +372,8 @@ This repository is dedicated to templates that are created and maintained by Zab
     * [Netgear](Network_Devices/Netgear)
         * [Netgear_GS110TP](Network_Devices/Netgear/template_netgear_gs110tp)
         * [Netgear_WG103](Network_Devices/Netgear/template_netgear_wg103)
+    * [OPNsense](Network_Devices/OPNsense/)
+      * [API](Network_Devices/OPNsense/API/template_opnsense/)
     * [Other](Network_Devices/Other)
         * [3COM 4500 52 Ports](Network_Devices/Other/template_3com_4500)
         * [Adva SNMP Autodiscovery](Network_Devices/Other/template_adva_fsp3000)
